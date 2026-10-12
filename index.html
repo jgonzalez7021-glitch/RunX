@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chupacabras & Adventure Run Tracker PR</title>
+    <!-- Leaflet CSS para el Mapa -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- jsPDF para generar el reporte -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #f97316;
+            --accent-hover: #ea580c;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --danger: #ef4444;
+            --success: #22c55e;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 650px;
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--accent);
+            margin-bottom: 5px;
+            font-size: 1.7rem;
+        }
+
+        p.subtitle {
+            text-align: center;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        select, input {
+            width: 100%;
+            padding: 10px;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            color: var(--text-main);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            box-sizing: border-box;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--accent-hover);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Mapa */
+        #map {
+            width: 100%;
+            height: 250px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #475569;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .stat-box {
+            background-color: #0f172a;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #334155;
+        }
+
+        .stat-box span {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 2px;
+        }
+
+        .stat-box strong {
+            font-size: 1.2rem;
+            color: var(--text-main);
+        }
+
+        .alert-box {
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+
+        .safe { background-color: rgba(34, 197, 94, 0.2); color: var(--success); border: 1px solid var(--success); }
+        .danger { background-color: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid var(--danger); animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .custom-emoji-icon {
+            font-size: 26px;
+            text-align: center;
+            line-height: 26px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>🇵🇷 PR Adventure & Run Tracker</h1>
+        <p class="subtitle">Corre, esquiva al Chupacabras o busca tu parada</p>
+
+        <!-- SETUP SCREEN -->
+        <div id="setup-screen">
+            <div class="form-group">
+                <label for="game-mode">Modo de Aventura / Ejercicio</label>
+                <select id="game-mode" onchange="toggleModeOptions()">
+                    <option value="chupacabra">🐐 Modo Chupacabras (Persecución)</option>
+                    <option value="coqui">🐸 Búsqueda de Coquíes</option>
+                    <option value="tesoro">🏴‍☠️ Búsqueda del Tesoro</option>
+                    <option value="borrachera">🍺 Borrachera / Parada de Beber (Gasolineras y Pubs)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="activity-type">Tipo de Actividad</label>
+                <select id="activity-type">
+                    <option value="Correr">Correr</option>
+                    <option value="Trotar">Trotar</option>
+                    <option value="Caminar">Caminar</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="target-miles">¿Cuántas millas?</label>
+                <input type="number" id="target-miles" value="3.0" step="0.5" min="0.5">
+            </div>
+
+            <div class="form-group">
+                <label for="target-time">¿En cuánto tiempo (minutos)?</label>
+                <input type="number" id="target-time" value="30" min="5">
+            </div>
+
+            <!-- Opción exclusiva Chupacabras -->
+            <div class="form-group" id="chupacabra-config">
+                <label for="chupacabra-speed">Velocidad del Chupacabras</label>
+                <select id="chupacabra-speed">
+                    <option value="1.2">Suave (1.2 mph)</option>
+                    <option value="2.5" selected>Mediano (2.5 mph)</option>
+                    <option value="5.0">Heavy / Rápido (5.0 mph)</option>
+                </select>
+            </div>
+
+            <button onclick="startAdventure()">¡Iniciar Aventura en el Mapa!</button>
+        </div>
+
+        <!-- TRACKER & MAP SCREEN -->
+        <div id="tracker-screen" class="hidden">
+            <div id="status-alert" class="alert-box safe">¡Todo en orden! En movimiento.</div>
+
+            <!-- MAPA LEAFLET -->
+            <div id="map"></div>
+
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <span>Distancia Recorrida</span>
+                    <strong id="user-dist">0.00 mi</strong>
+                </div>
+                <div class="stat-box" id="target-stat-box">
+                    <span>Meta / Chupa Dist</span>
+                    <strong id="secondary-dist">0.00 mi</strong>
+                </div>
+                <div class="stat-box">
+                    <span>Tiempo Transcurrido</span>
+                    <strong id="timer-display">00:00</strong>
+                </div>
+                <div class="stat-box">
+                    <span>Ritmo (Pace)</span>
+                    <strong id="pace-display">-- min/mi</strong>
+                </div>
+                <div class="stat-box">
+                    <span>Pasos Estimados</span>
+                    <strong id="steps-display">0</strong>
+                </div>
+                <div class="stat-box">
+                    <span>Calorías Aprox.</span>
+                    <strong id="cal-display">0 kcal</strong>
+                </div>
+            </div>
+
+            <button onclick="stopAndGeneratePDF()" style="background-color: var(--danger);">🛑 Terminar y Generar PDF</button>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map, timerInterval;
+        let secondsElapsed = 0;
+        let userDistance = 0;
+        let targetMiles = 3.0;
+        let targetTimeMin = 30;
+        let gameMode = 'chupacabra';
+        let activityType = 'Correr';
+        let chupaSpeed = 2.5;
+        let chupaDistance = 0;
+        let totalSteps = 0;
+        let calories = 0;
+
+        // Coordenadas base en Puerto Rico (San Juan por defecto, adaptable a GPS)
+        let baseLat = 18.4655;
+        let baseLng = -66.1057;
+        let userMarker, chupaMarker;
+        let targetMarkers = [];
+
+        // Puntos de interés para Borrachera / Gasolineras / Pubs en PR
+        const prDrinkingSpots = [
+            { name: "TotalEnergies College Park", lat: 18.3985, lng: -66.0520, type: "⛽ Gasolinera / Birras" },
+            { name: "Gulf Station", lat: 18.4100, lng: -66.0650, type: "⛽ Gasolinera" },
+            { name: "Mobil Gas Station", lat: 18.4250, lng: -66.0780, type: "⛽ Gasolinera / Snacks" },
+            { name: "Logan's Irish Pub", lat: 18.4512, lng: -66.0631, type: "🍺 Pub & Cervezas" },
+            { name: "El Batey Bar (Viejo San Juan)", lat: 18.4659, lng: -66.1165, type: "🍺 Icónico Bar" }
+        ];
+
+        function toggleModeOptions() {
+            gameMode = document.getElementById('game-mode').value;
+            const chupaConfig = document.getElementById('chupacabra-config');
+            if (gameMode === 'chupacabra') {
+                chupaConfig.classList.remove('hidden');
+            } else {
+                chupaConfig.classList.add('hidden');
+            }
+        }
+
+        function startAdventure() {
+            targetMiles = parseFloat(document.getElementById('target-miles').value) || 3.0;
+            targetTimeMin = parseInt(document.getElementById('target-time').value) || 30;
+            gameMode = document.getElementById('game-mode').value;
+            activityType = document.getElementById('activity-type').value;
+            chupaSpeed = parseFloat(document.getElementById('chupacabra-speed').value) || 2.5;
+
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('tracker-screen').classList.remove('hidden');
+
+            secondsElapsed = 0;
+            userDistance = 0;
+            chupaDistance = 0;
+            totalSteps = 0;
+            calories = 0;
+
+            // Intentar obtener ubicación GPS real del usuario en PR
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    baseLat = position.coords.latitude;
+                    baseLng = position.coords.longitude;
+                    initMapAndRun();
+                }, () => {
+                    initMapAndRun(); // Fallback a San Juan si deniega
+                });
+            } else {
+                initMapAndRun();
+            }
+        }
+
+        function initMapAndRun() {
+            // Inicializar Mapa Leaflet
+            if (map) {
+                map.remove();
+            }
+            map = L.map('map').setView([baseLat, baseLng], 14);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            // Icono del usuario (🏃‍♂️ grande)
+            const userIcon = L.divHtmlIcon ? null : L.divIcon({
+                html: '<div class="custom-emoji-icon">🏃‍♂️</div>',
+                className: '',
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            });
+
+            userMarker = L.marker([baseLat, baseLng], {icon: userIcon}).addTo(map)
+                .bindPopup("<b>¡Tú estás aquí!</b>").openPopup();
+
+            // Configurar elementos según el modo
+            targetMarkers.forEach(m => map.removeLayer(m));
+            targetMarkers = [];
+
+            if (gameMode === 'chupacabra') {
+                // Chupacabras empieza un poquito atrás (0.05 millas al sur)
+                const chupaLat = baseLat - 0.008;
+                const chupaLng = baseLng;
+                const chupaIcon = L.divIcon({
+                    html: '<div class="custom-emoji-icon">🐐</div>',
+                    className: '',
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+                chupaMarker = L.marker([chupaLat, chupaLng], {icon: chupaIcon}).addTo(map)
+                    .bindPopup("<b>¡El Chupacabras te persigue!</b>");
+                document.getElementById('secondary-dist').textContent = "0.00 mi";
+            } else if (gameMode === 'coqui') {
+                // Poner coquíes alrededor
+                for (let i = 0; i < 4; i++) {
+                    const cLat = baseLat + (Math.random() - 0.5) * 0.02;
+                    const cLng = baseLng + (Math.random() - 0.5) * 0.02;
+                    const marker = L.marker([cLat, cLng], {
+                        icon: L.divIcon({html: '<div class="custom-emoji-icon">🐸</div>', className:'', iconSize:[28,28], iconAnchor:[14,14]})
+                    }).addTo(map).bindPopup("¡Coquí escondido!");
+                    targetMarkers.push(marker);
+                }
+                document.getElementById('secondary-dist').textContent = "4 Coquíes";
+            } else if (gameMode === 'tesoro') {
+                for (let i = 0; i < 3; i++) {
+                    const tLat = baseLat + (Math.random() - 0.5) * 0.02;
+                    const tLng = baseLng + (Math.random() - 0.5) * 0.02;
+                    const marker = L.marker([tLat, tLng], {
+                        icon: L.divIcon({html: '<div class="custom-emoji-icon">🏴‍☠️</div>', className:'', iconSize:[28,28], iconAnchor:[14,14]})
+                    }).addTo(map).bindPopup("¡Cofre de Tesoro!");
+                    targetMarkers.push(marker);
+                }
+                document.getElementById('secondary-dist').textContent = "3 Tesoros";
+            } else if (gameMode === 'borrachera') {
+                prDrinkingSpots.forEach(spot => {
+                    const marker = L.marker([spot.lat, spot.lng], {
+                        icon: L.divIcon({html: '<div class="custom-emoji-icon">🍺</div>', className:'', iconSize:[28,28], iconAnchor:[14,14]})
+                    }).addTo(map).bindPopup(`<b>${spot.name}</b><br>${spot.type}`);
+                    targetMarkers.push(marker);
+                });
+                document.getElementById('secondary-dist').textContent = "Paradas PR";
+            }
+
+            timerInterval = setInterval(updateSimulation, 1000);
+        }
+
+        function updateSimulation() {
+            secondsElapsed++;
+
+            // Velocidad del usuario calculada según meta
+            const userSpeedMps = targetMiles / (targetTimeMin * 60); // millas por segundo
+            userDistance = userSpeedMps * secondsElapsed;
+
+            // Pasos y calorías estimados
+            totalSteps = Math.round(userDistance * 2000);
+            calories = Math.round(userDistance * 95); // ~95 kcal por milla
+
+            // Ritmo (Pace)
+            let paceMinPerMile = 0;
+            if (userDistance > 0) {
+                paceMinPerMile = (secondsElapsed / 60) / userDistance;
+            }
+            const pMin = Math.floor(paceMinPerMile);
+            const pSec = Math.round((paceMinPerMile - pMin) * 60);
+            document.getElementById('pace-display').textContent = userDistance > 0 ? `${pMin}:${pSec.toString().padStart(2, '0')} min/mi` : `-- min/mi`;
+
+            // Tiempo formtado
+            const mins = Math.floor(secondsElapsed / 60);
+            const secs = secondsElapsed % 60;
+            document.getElementById('timer-display').textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+            // Actualizar textos
+            document.getElementById('user-dist').textContent = userDistance.toFixed(2) + ' mi';
+            document.getElementById('steps-display').textContent = totalSteps.toLocaleString();
+            document.getElementById('cal-display').textContent = calories + ' kcal';
+
+            // Mover usuario en el mapa simulando avance hacia el Norte / Este
+            const newLat = baseLat + (userDistance * 0.014); // factor visual en mapa
+            const newLng = baseLng + (userDistance * 0.005);
+            userMarker.setLatLng([newLat, newLng]);
+            map.panTo([newLat, newLng]);
+
+            const alertBox = document.getElementById('status-alert');
+
+            if (gameMode === 'chupacabra') {
+                const chupaSpeedMps = chupaSpeed / 3600;
+                chupaDistance = chupaSpeedMps * secondsElapsed;
+                document.getElementById('secondary-dist').textContent = chupaDistance.toFixed(2) + ' mi';
+
+                // Mover Chupacabras detrás del usuario
+                const chupaLat = baseLat + (chupaDistance * 0.014);
+                const chupaLng = baseLng + (chupaDistance * 0.005);
+                chupaMarker.setLatLng([chupaLat, chupaLng]);
+
+                if (chupaDistance >= userDistance) {
+                    alertBox.className = "alert-box danger";
+                    alertBox.textContent = "⚠️ ¡EL CHUPACABRAS TE ALCANZÓ! ¡CORRE MÁS RÁPIDO! ⚠️";
+                } else if ((userDistance - chupaDistance) < 0.15) {
+                    alertBox.className = "alert-box danger";
+                    alertBox.textContent = "🚨 ¡El Chupacabras te pisa los talones!";
+                } else {
+                    alertBox.className = "alert-box safe";
+                    alertBox.textContent = "🐐 ¡Le llevas ventaja al Chupacabras! Sigue así.";
+                }
+            } else if (gameMode === 'borrachera') {
+                alertBox.className = "alert-box safe";
+                alertBox.textContent = "🍺 ¡Ruta de gasolineras y barras activa en Puerto Rico! Revisa el mapa.";
+            } else {
+                alertBox.className = "alert-box safe";
+                alertBox.textContent = `🎯 ¡Buscando elementos de aventura (${activityType})!`;
+            }
+
+            // Meta cumplida
+            if (userDistance >= targetMiles) {
+                clearInterval(timerInterval);
+                alertBox.className = "alert-box safe";
+                alertBox.textContent = "🎉 ¡Meta completada con éxito en el mapa!";
+            }
+        }
+
+        function stopAndGeneratePDF() {
+            clearInterval(timerInterval);
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(18);
+            doc.setTextColor(249, 115, 22);
+            doc.text("🇵🇷 Reporte de Aventura - PR Tracker", 20, 20);
+
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Fecha: ${new Date().toLocaleDateString()} | Modo: ${gameMode.toUpperCase()}`, 20, 27);
+
+            doc.setLineWidth(0.4);
+            doc.line(20, 32, 190, 32);
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(12);
+            doc.setTextColor(30, 41, 59);
+
+            let y = 42;
+            doc.text(`• Actividad: ${activityType}`, 20, y); y += 9;
+            doc.text(`• Distancia recorrida: ${userDistance.toFixed(2)} millas`, 20, y); y += 9;
+            doc.text(`• Tiempo total: ${document.getElementById('timer-display').textContent}`, 20, y); y += 9;
+            doc.text(`• Ritmo promedio (Pace): ${document.getElementById('pace-display').textContent}`, 20, y); y += 9;
+            doc.text(`• Pasos totales: ${totalSteps.toLocaleString()} pasos`, 20, y); y += 9;
+            doc.text(`• Calorías quemadas: ${calories} kcal`, 20, y); y += 9;
+
+            if (gameMode === 'chupacabra') {
+                doc.text(`• Distancia Chupacabras: ${chupaDistance.toFixed(2)} millas`, 20, y); y += 9;
+                doc.setFont("helvetica", "bold");
+                if (chupaDistance >= userDistance) {
+                    doc.setTextColor(239, 68, 68);
+                    doc.text(`Resultado: ¡El Chupacabras te atrapó! 💀`, 20, y);
+                } else {
+                    doc.setTextColor(34, 197, 94);
+                    doc.text(`Resultado: ¡Escapaste con vida del Chupacabras! 🎉`, 20, y);
+                }
+            } else {
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(34, 197, 94);
+                doc.text(`Resultado: ¡Aventura completada en Puerto Rico! 🏆`, 20, y);
+            }
+
+            doc.save(`PR_Adventure_Run_${new Date().toISOString().slice(0,10)}.pdf`);
+
+            document.getElementById('tracker-screen').classList.add('hidden');
+            document.getElementById('setup-screen').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
